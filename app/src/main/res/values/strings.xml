@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Tweetify</string>
+    <string name="title_activity_main2">Main2Activity</string>
+    <string name="action_settings">Settings</string>
+    <string name="KEY">1N3oFl1WrG621USMKXyPi5q2b</string>
+    <string name="SECRET">H04mI3CLX7Xi2EAS2queg5klEM9egM5Q8s6COfcaxK15FtPJyP</string>
+    <string name="section_format">Hello World from section: %1$d</string>
+</resources>

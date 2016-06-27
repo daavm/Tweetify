@@ -1,0 +1,65 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:id="@+id/rel_layout"
+    android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    tools:context=".EmbeddedTimelineActivity">
+    <android.support.v7.widget.Toolbar android:id="@+id/toolbar"
+        android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        app:popupTheme="@style/AppTheme.PopupOverlay" >
+        <TextView
+            android:id="@+id/toolbar_title"
+            android:text="Tweetify"
+            android:textSize="20dp"
+            android:textColor="#ffffff"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+    </android.support.v7.widget.Toolbar>
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_below="@id/toolbar"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <ListView android:id="@id/android:list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="0"/>
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:tools="http://schemas.android.com/tools"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal"
+        android:weightSum="6"
+        tools:context=".MainActivity" >
+        <ImageButton
+            android:layout_width="40dp"
+            android:id="@+id/RT"
+            android:layout_height="30dp"
+            android:layout_marginLeft="25dp"
+            android:layout_gravity="fill_vertical"
+            android:visibility="invisible"
+            android:background="@drawable/rt_alpha_1"/>
+        <ImageButton
+            android:layout_width="40dp"
+            android:id="@+id/LIKE"
+            android:layout_height="30dp"
+            android:layout_marginLeft="25dp"
+            android:layout_gravity="fill_vertical"
+            android:visibility="invisible"
+            android:background="@drawable/like_alpha_1"
+            android:elevation="0dp" />
+    </LinearLayout>
+    </LinearLayout>
+    <android.support.design.widget.FloatingActionButton
+        android:src="@drawable/top"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="496dp"
+        android:layout_marginLeft="289dp"
+        android:clickable="true"
+        app:fabSize="normal"
+        android:id="@+id/fab" />
+</RelativeLayout>
