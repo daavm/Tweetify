@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.StrictMode;
 import android.preference.PreferenceManager;
@@ -69,14 +70,11 @@ public class SingleTweet extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.tweet_custom);
         final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
-        StrictMode.setThreadPolicy(policy);
         final Bundle bundle = getIntent().getExtras();
         final long ID = bundle.getLong("ID");
         final ImageButton RT = (ImageButton)findViewById(R.id.RT);
         final ImageButton LIKE = (ImageButton)findViewById(R.id.LIKE);
-        checkRetweet();
-        checkLike();
+
         RT.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -97,12 +95,21 @@ public class SingleTweet extends AppCompatActivity {
                 like();
             }
         });
-
-
+        new SimpleTask().execute();
+    }
+    public void loadTweet() throws IOException {
+        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+        StrictMode.setThreadPolicy(policy);
+        final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        final Bundle bundle = getIntent().getExtras();
+        final long ID = bundle.getLong("ID");
+        final ImageButton RT = (ImageButton)findViewById(R.id.RT);
+        final ImageButton LIKE = (ImageButton)findViewById(R.id.LIKE);
         final String userTokens = preferences.getString("userTokens", "");
         final String userSecrets = preferences.getString("userSecrets", "");
         final String consumerKey = getString(R.string.KEY);
         final String consumerSecret = getString(R.string.SECRET);
+
         TwitterFactory factory = new TwitterFactory();
         Twitter twitter = factory.getInstance();
         twitter.setOAuthConsumer(consumerKey, consumerSecret);
@@ -111,10 +118,17 @@ public class SingleTweet extends AppCompatActivity {
         try {
             Status tweet = twitter.showStatus(ID);
             TextView tweetText = (TextView)findViewById(R.id.tweetText);
+            TextView user_name = (TextView)findViewById(R.id.user_name);
             ImageView imageView = (ImageView)findViewById(R.id.imageView2);
-            tweetText.setText(tweet.getText());
-
+            TextView username = (TextView)findViewById(R.id.username);
+            ImageView imageView2 = (ImageView)findViewById(R.id.imageView3);
+            URL url2 = new URL(tweet.getUser().getProfileImageURL());
+            Bitmap bmp2 = BitmapFactory.decodeStream(url2.openConnection().getInputStream());
+            imageView2.setImageBitmap(bmp2);
             MediaEntity[] media = tweet.getMediaEntities();
+            tweetText.setText(tweet.getText());
+            user_name.setText(tweet.getUser().getName());
+            username.setText("@"+tweet.getUser().getScreenName());
             for(MediaEntity m : media){
                 URL url = new URL(m.getMediaURL());
                 Bitmap bmp = BitmapFactory.decodeStream(url.openConnection().getInputStream());
@@ -126,7 +140,8 @@ public class SingleTweet extends AppCompatActivity {
             if(tweet.isFavorited()) {
                 Toast.makeText(getApplicationContext(), "Is liked by you", Toast.LENGTH_LONG).show();
             }
-
+            RT.setVisibility(View.VISIBLE);
+            LIKE.setVisibility(View.VISIBLE);
         } catch (twitter4j.TwitterException e) {
             e.printStackTrace();
         } catch (MalformedURLException e) {
@@ -134,23 +149,6 @@ public class SingleTweet extends AppCompatActivity {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        /**
-        List<Long> tweetIds = Arrays.asList(ID);
-        setListAdapter(adapter);
-        adapter.setTweetIds(tweetIds, new Callback<List<Tweet>>() {
-            @Override
-            public void success(Result<List<Tweet>> result) {
-                RT.setVisibility(View.VISIBLE);
-                LIKE.setVisibility(View.VISIBLE);
-            }
-
-            @Override
-            public void failure(TwitterException exception) {
-                // Toast.makeText(...).show();
-            }
-        });
-         **/
-
     }
     public void retweet(){
         try {
@@ -246,4 +244,25 @@ public class SingleTweet extends AppCompatActivity {
         }
 
     }
+    private class SimpleTask extends AsyncTask<Void, Void, Void> {
+
+        @Override
+        protected Void doInBackground(Void... params) {
+            runOnUiThread(new Runnable() {
+                public void run(){
+                    checkLike();
+                    checkRetweet();
+                    try {
+                        loadTweet();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+            return null;
+        }
+        protected void onPostExecute(Void result) {
+        }
+    }
+
 }

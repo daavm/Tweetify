@@ -6,9 +6,19 @@
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:textColorSecondary">@color/abc_secondary_text_material_light</item>
+        <item name="actionMenuTextColor">#FFFFFF</item>
+
 
     </style>
+    <style name="GalaxyZooThemeToolbarDarkOverflow" parent="Theme.AppCompat.NoActionBar">
 
+        <item name="android:textColorPrimary">@color/abc_primary_text_material_light</item>
+
+
+
+
+    </style>
     <style name="AppTheme.AppBarOverlay" parent="ThemeOverlay.AppCompat.Dark.ActionBar" />
     <style name="tw__TweetText.Compact">
         <item name="android:layout_marginTop">@dimen/tw__compact_tweet_text_margin_top</item>

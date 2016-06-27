@@ -6,7 +6,9 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.StrictMode;
 import android.preference.PreferenceManager;
 import android.support.design.widget.FloatingActionButton;
@@ -56,6 +58,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import io.fabric.sdk.android.Fabric;
 import twitter4j.Paging;
@@ -72,14 +75,16 @@ import static java.security.AccessController.getContext;
  */
 
 public class EmbeddedTimelineActivity extends ListActivity
-implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener{
+implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener {
     @Override
-    public void onCreate(Bundle savedInstanceState){
-        super.onCreate(savedInstanceState);
+    public void onCreate(Bundle savedInstanceState) {
         final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        final SharedPreferences.Editor editor = preferences.edit();
+        super.onCreate(savedInstanceState);
         StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         StrictMode.setThreadPolicy(policy);
-        final String TWITTER_KEY = getString(R.string.KEY) ;
+        editor.putInt("page", 1);
+        final String TWITTER_KEY = getString(R.string.KEY);
         final String TWITTER_SECRET = getString(R.string.SECRET);
         TwitterAuthConfig authConfig = new TwitterAuthConfig(TWITTER_KEY, TWITTER_SECRET);
         Fabric.with(this, new Twitter(authConfig), new TweetComposer(), new Crashlytics());
@@ -105,8 +110,9 @@ implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener
         });
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        TextView toolbar_title = (TextView) findViewById(R.id.toolbar_title);
+        toolbar_title.setText("Tweetify");
 
-        // Set an OnMenuItemClickListener to handle menu item clicks
         toolbar.setOnMenuItemClickListener(new Toolbar.OnMenuItemClickListener() {
             @Override
             public boolean onMenuItemClick(MenuItem item) {
@@ -158,26 +164,40 @@ implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener
                         (getListView() == null || getListView().getChildCount() == 0) ?
                                 0 : getListView().getChildAt(0).getTop();
                 swipeLayout.setEnabled(firstVisibleItem == 0 && topRowVerticalPosition >= 0);
+                int l = visibleItemCount + firstVisibleItem;
+                if (l >= totalItemCount) {
+                    final int page = preferences.getInt("page", 1);
+                    editor.putInt("page", page + 1);
+
+
+                }
             }
         });
 
-
-
-
-
-
+        getListView().setOnItemClickListener(EmbeddedTimelineActivity.this);
+        new SimpleTask2().execute();
+    }
+    @Override
+    public void onRefresh() {
+        final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
+        swipeLayout.setRefreshing(true);
+        onLoadTimeline();
+    }
+    public void onLoadTimeline() {
+        final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        //final int page = preferences.getInt("page", 1);
         Paging paging = new Paging();
-        paging.setCount(400);
+        paging.setCount(800);
+        SharedPreferences.Editor editor = preferences.edit();
+        //editor.putInt("page", paging.getPage());
 
-
-        ArrayList<String> listItems=new ArrayList<String>();
+        final ArrayList<String> listItems = new ArrayList<String>();
         ArrayAdapter<String> adapter;
-        adapter=new ArrayAdapter<String>(this,
-              R.layout.item_list, android.R.id.text1,
+        adapter = new ArrayAdapter<String>(this,
+                R.layout.item_list, android.R.id.text1,
                 listItems);
+
         setListAdapter(adapter);
-
-
         final String userTokens = preferences.getString("userTokens", "");
         final String userSecrets = preferences.getString("userSecrets", "");
         final String consumerKey = getString(R.string.KEY);
@@ -190,157 +210,63 @@ implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener
         AccessToken accessToken = new AccessToken(userTokens, userSecrets);
         twitter.setOAuthAccessToken(accessToken);
         List<Status> statuses = null;
-        ImageView tweetIcon = (ImageView)findViewById(R.id.tweetIcon);
         try {
             statuses = twitter.getHomeTimeline(paging);
         } catch (twitter4j.TwitterException e) {
             e.printStackTrace();
         }
-            for (Status status : statuses) {
-                SharedPreferences.Editor editor = preferences.edit();
-                System.out.println(status.getUser().getName() + ":" +
-                        status.getText());
-                String text = status.getText();
-                if(text.contains("RT @")){
-                    String textRT = status.getRetweetedStatus().getText();
-                    listItems.add(textRT);
-                    editor.putLong(textRT, status.getId());
-                    editor.commit();
-                } else{
-                    listItems.add(text);
-                    editor.putLong(text, status.getId());
-                    editor.commit();
+        for (Status status : statuses) {
+            System.out.println(status.getUser().getName() + ":" +
+                    status.getText());
+            String text = status.getText();
+            if (status.isRetweet() == true) {
+                Status RT = status.getRetweetedStatus();
+                String textRT = RT.getText();
 
-                }
+                listItems.add(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + textRT + System.getProperty("line.separator"));
+                editor.putLong(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + textRT + System.getProperty("line.separator"), status.getId());
+            } else {
+                listItems.add(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + text + System.getProperty("line.separator"));
+                editor.putLong(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + text + System.getProperty("line.separator"), status.getId());
 
             }
-        getListView().setOnItemClickListener(EmbeddedTimelineActivity.this);
+            editor.commit();
+        }
+
+        final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
+        swipeLayout.setRefreshing(false);
 
     }
     @Override
-    public void onItemClick (AdapterView<?> parent, View view, int position, long id) {
+    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
 
 
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         Long tweet_id = preferences.getLong(getListView().getItemAtPosition(position).toString(), 0L);
-        Toast.makeText(EmbeddedTimelineActivity.this, ""+tweet_id,
-                Toast.LENGTH_SHORT).show();
 
         Intent intent = new Intent(EmbeddedTimelineActivity.this, SingleTweet.class);
         intent.putExtra("ID", tweet_id);
         startActivity(intent);
-     }
-    public void onStop(){
-        super.onStop();
     }
-    public void onPause(){
-        super.onPause();
-    }
+
     @Override
     public void onBackPressed() {
         Intent homeIntent = new Intent(Intent.ACTION_MAIN);
-        homeIntent.addCategory( Intent.CATEGORY_HOME );
+        homeIntent.addCategory(Intent.CATEGORY_HOME);
         startActivity(homeIntent);
     }
-    public void onLoadTweetsStart(){
-        int count = 200;
-
-        final StatusesService service = Twitter.getInstance().getApiClient().getStatusesService(); //mentions 6null, home7null
-        service.homeTimeline(count, null, null, null, false, true, null, new Callback<List<Tweet>>() {
-                            @Override
-                            public void success(Result<List<Tweet>> result) {
-                                final FixedTweetTimeline searchTimeline = new FixedTweetTimeline.Builder()
-                                        .setTweets(result.data)
-                                        .build();
-                                final CustomTweetTimelineListAdapter adapter2 = new CustomTweetTimelineListAdapter(EmbeddedTimelineActivity.this, searchTimeline);
-
-                                setListAdapter(adapter2);
-                                final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
-                                swipeLayout.setRefreshing(false);
-                            }
-                            @Override
-                            public void failure(TwitterException error) {
-                                Log.d("TwitterKit", "Liking with Twitter failure", error);
-                                Toast.makeText(EmbeddedTimelineActivity.this, "Failed to retrieve timeline",
-                                        Toast.LENGTH_SHORT).show();
-                                final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
-                                swipeLayout.setRefreshing(false);
-                            }
-                        }
-                );
-    }
-    public void onLoadTweets(){
-        long max_id = 10;
-        final StatusesService service = Twitter.getInstance().getApiClient().getStatusesService(); //mentions 6null, home7null
-        service.homeTimeline(800, null, null, null, null, null, null, new Callback<List<Tweet>>() {
-                    @Override
-                    public void success(Result<List<Tweet>> result) {
-                        final FixedTweetTimeline searchTimeline = new FixedTweetTimeline.Builder()
-                                .setTweets(result.data)
-                                .build();
-                        final CustomTweetTimelineListAdapter adapter2 = new CustomTweetTimelineListAdapter(EmbeddedTimelineActivity.this, searchTimeline);
-
-                        setListAdapter(adapter2);
-                        final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
-                        swipeLayout.setRefreshing(false);
-                    }
-                    @Override
-                    public void failure(TwitterException error) {
-                        Log.d("TwitterKit", "Liking with Twitter failure", error);
-                        Toast.makeText(EmbeddedTimelineActivity.this, "Failed to retrieve timeline",
-                                Toast.LENGTH_SHORT).show();
-                        final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
-                        swipeLayout.setRefreshing(false);
-                    }
-                }
-        );
-    }
-
-    public void onRefresh() {
-        final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
-        swipeLayout.setRefreshing(true);
-       // onLoadTweets();
-    }
-    class CustomTweetTimelineListAdapter extends TweetTimelineListAdapter {
-        public CustomTweetTimelineListAdapter(Context context, Timeline<Tweet> timeline) {
-            super(context, timeline);
-        }
+    private class SimpleTask2 extends AsyncTask<Void, Void, Void> {
 
         @Override
-        public View getView(final int position, View convertView, ViewGroup parent) {
-            View view = super.getView(position, convertView, parent);
-
-            //disable subviews
-            if(view instanceof ViewGroup){
-                //disableViewAndSubViews((ViewGroup) view); -- Disable like and share
-            }
-
-            //enable root view and attach custom listener
-            view.setEnabled(true);
-            view.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    Intent intent = new Intent(EmbeddedTimelineActivity.this, SingleTweet.class);
-                    intent.putExtra("ID", getItemId(position));
-                    startActivity(intent);
+        protected Void doInBackground(Void... params) {
+            runOnUiThread(new Runnable() {
+                public void run(){
+                    onLoadTimeline();
                 }
             });
-            return view;
-        }
-
-        private void disableViewAndSubViews(ViewGroup layout) {
-            layout.setEnabled(false);
-            for (int i = 0; i < layout.getChildCount(); i++) {
-                View child = layout.getChildAt(i);
-                if (child instanceof ViewGroup) {
-                    disableViewAndSubViews((ViewGroup) child);
-                } else {
-                    child.setEnabled(false);
-                    child.setClickable(false);
-                    child.setLongClickable(false);
-                }
-            }
+            return null;
         }
 
     }
+
 }
