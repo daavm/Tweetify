@@ -4,6 +4,7 @@ import android.app.ListActivity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
@@ -59,8 +60,12 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import io.fabric.sdk.android.Fabric;
+import twitter4j.MediaEntity;
 import twitter4j.Paging;
 import twitter4j.Status;
 import twitter4j.TweetEntity;
@@ -76,39 +81,40 @@ import static java.security.AccessController.getContext;
 
 public class EmbeddedTimelineActivity extends ListActivity
 implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener {
+    private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
+
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_timeline);
+
+        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         final SharedPreferences.Editor editor = preferences.edit();
-        super.onCreate(savedInstanceState);
-        StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
         StrictMode.setThreadPolicy(policy);
         editor.putInt("page", 1);
         final String TWITTER_KEY = getString(R.string.KEY);
         final String TWITTER_SECRET = getString(R.string.SECRET);
         TwitterAuthConfig authConfig = new TwitterAuthConfig(TWITTER_KEY, TWITTER_SECRET);
         Fabric.with(this, new Twitter(authConfig), new TweetComposer(), new Crashlytics());
-        setContentView(R.layout.activity_timeline);
         final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
-        swipeLayout.setOnRefreshListener(this);
-        swipeLayout.setEnabled(false);
         final FloatingActionButton floatingActionButton = (FloatingActionButton) this.findViewById(R.id.fab);
-        floatingActionButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                final TwitterSession session = TwitterCore.getInstance().getSessionManager().getActiveSession();
-                final Intent intent = new ComposerActivity.Builder(EmbeddedTimelineActivity.this).session(session).hashtags()
-                        .createIntent();
-                startActivity(intent);
-            }
-        });
         floatingActionButton.setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
-
+                Toast.makeText(getApplicationContext(), "Post a new tweet", Toast.LENGTH_LONG).show();
                 return false;
             }
         });
-
+        floatingActionButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                    final TwitterSession session = TwitterCore.getInstance().getSessionManager().getActiveSession();
+                    final Intent intent = new ComposerActivity.Builder(EmbeddedTimelineActivity.this).session(session).hashtags()
+                            .createIntent();
+                    startActivity(intent);
+            }
+        });
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         TextView toolbar_title = (TextView) findViewById(R.id.toolbar_title);
         toolbar_title.setText("Tweetify");
@@ -149,7 +155,8 @@ implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener
                 return true;
             }
         });
-
+        swipeLayout.setOnRefreshListener(this);
+        swipeLayout.setEnabled(false);
         // Inflate a menu to be displayed in the toolbar
         toolbar.inflateMenu(R.menu.menu_main2);
         getListView().setOnScrollListener(new AbsListView.OnScrollListener() {
@@ -164,78 +171,138 @@ implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener
                         (getListView() == null || getListView().getChildCount() == 0) ?
                                 0 : getListView().getChildAt(0).getTop();
                 swipeLayout.setEnabled(firstVisibleItem == 0 && topRowVerticalPosition >= 0);
-                int l = visibleItemCount + firstVisibleItem;
-                if (l >= totalItemCount) {
-                    final int page = preferences.getInt("page", 1);
-                    editor.putInt("page", page + 1);
-
-
-                }
+             /**   int lastInScreen = firstVisibleItem + visibleItemCount;
+                if((lastInScreen == totalItemCount)){
+                    onLoadTimeline2();
+                } **/
             }
-        });
 
+        });
         getListView().setOnItemClickListener(EmbeddedTimelineActivity.this);
-        new SimpleTask2().execute();
+        Runnable task = new Runnable(){
+            @Override
+            public void run() {
+                new SimpleTask2().execute();
+            }
+        };
+        worker.schedule(task, 2, TimeUnit.SECONDS);
     }
     @Override
     public void onRefresh() {
         final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
-        swipeLayout.setRefreshing(true);
-        onLoadTimeline();
-    }
-    public void onLoadTimeline() {
-        final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        //final int page = preferences.getInt("page", 1);
-        Paging paging = new Paging();
-        paging.setCount(800);
-        SharedPreferences.Editor editor = preferences.edit();
-        //editor.putInt("page", paging.getPage());
-
-        final ArrayList<String> listItems = new ArrayList<String>();
-        ArrayAdapter<String> adapter;
-        adapter = new ArrayAdapter<String>(this,
-                R.layout.item_list, android.R.id.text1,
-                listItems);
-
-        setListAdapter(adapter);
-        final String userTokens = preferences.getString("userTokens", "");
-        final String userSecrets = preferences.getString("userSecrets", "");
-        final String consumerKey = getString(R.string.KEY);
-        final String consumerSecret = getString(R.string.SECRET);
-        ConfigurationBuilder cb = new ConfigurationBuilder();
-        cb.setIncludeEntitiesEnabled(false);
-        TwitterFactory factory = new TwitterFactory();
-        twitter4j.Twitter twitter = factory.getInstance();
-        twitter.setOAuthConsumer(consumerKey, consumerSecret);
-        AccessToken accessToken = new AccessToken(userTokens, userSecrets);
-        twitter.setOAuthAccessToken(accessToken);
-        List<Status> statuses = null;
-        try {
-            statuses = twitter.getHomeTimeline(paging);
-        } catch (twitter4j.TwitterException e) {
-            e.printStackTrace();
-        }
-        for (Status status : statuses) {
-            System.out.println(status.getUser().getName() + ":" +
-                    status.getText());
-            String text = status.getText();
-            if (status.isRetweet() == true) {
-                Status RT = status.getRetweetedStatus();
-                String textRT = RT.getText();
-
-                listItems.add(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + textRT + System.getProperty("line.separator"));
-                editor.putLong(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + textRT + System.getProperty("line.separator"), status.getId());
-            } else {
-                listItems.add(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + text + System.getProperty("line.separator"));
-                editor.putLong(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + text + System.getProperty("line.separator"), status.getId());
-
-            }
-            editor.commit();
-        }
-
-        final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
+        TextView title = (TextView)findViewById(R.id.toolbar_title);
+        title.setText("Refreshing timeline...");
         swipeLayout.setRefreshing(false);
+        new SimpleTask2().execute();
 
+    }
+    @Override
+    public void onBackPressed() {
+        Intent homeIntent = new Intent(Intent.ACTION_MAIN);
+        homeIntent.addCategory(Intent.CATEGORY_HOME);
+        startActivity(homeIntent);
+    }
+
+    private class SimpleTask2 extends AsyncTask<Void, Void, Void> {
+
+        @Override
+        protected Void doInBackground(Void... params) {
+
+            runOnUiThread(new Runnable() {
+                public void run(){
+                    final SwipeRefreshLayout swipeLayout = (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
+                    swipeLayout.setRefreshing(true);
+
+                    final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+                    //final int page = preferences.getInt("page", 1);
+                    Paging paging = new Paging();
+                    paging.setCount(100);
+                    SharedPreferences.Editor editor = preferences.edit();
+                    //editor.putInt("page", paging.getPage());
+
+                    final ArrayList<String> listItems = new ArrayList<String>();
+                    ArrayAdapter<String> adapter;
+                    adapter = new ArrayAdapter<String>(EmbeddedTimelineActivity.this,
+                            R.layout.item_list, android.R.id.text1,
+                            listItems);
+
+                    setListAdapter(adapter);
+                    final String userTokens = preferences.getString("userTokens", "");
+                    final String userSecrets = preferences.getString("userSecrets", "");
+                    final String consumerKey = getString(R.string.KEY);
+                    final String consumerSecret = getString(R.string.SECRET);
+                    ConfigurationBuilder cb = new ConfigurationBuilder();
+                    cb.setIncludeEntitiesEnabled(false);
+                    TwitterFactory factory = new TwitterFactory();
+                    twitter4j.Twitter twitter = factory.getInstance();
+                    twitter.setOAuthConsumer(consumerKey, consumerSecret);
+                    AccessToken accessToken = new AccessToken(userTokens, userSecrets);
+                    twitter.setOAuthAccessToken(accessToken);
+                    List<twitter4j.Status> statuses = null;
+                    try {
+                        statuses = twitter.getHomeTimeline(paging);
+                        for (twitter4j.Status status : statuses) {
+                            System.out.println(status.getUser().getName() + ":" +
+                                    status.getText());
+
+                            String text = status.getText();
+                            if (status.isRetweet() == true) {
+                                if(status.getInReplyToScreenName() != null){
+                                    twitter4j.Status RT = status.getRetweetedStatus();
+                                    String textRT = RT.getText();
+                                    editor.putString(status.getId()+"text", textRT);
+                                    listItems.add(System.getProperty("line.separator") + "@" + status.getRetweetedStatus().getUser().getScreenName() + "  (Retweeted by @" + status.getUser().getScreenName() + ")" + System.getProperty("line.separator") + System.getProperty("line.separator") + textRT + System.getProperty("line.separator") + System.getProperty("line.separator") + "RT " + status.getRetweetCount() + "     LIKE " + status.getFavoriteCount() + "        In reply to @" + status.getInReplyToScreenName() + System.getProperty("line.separator"));
+                                    editor.putLong(System.getProperty("line.separator") + "@" + status.getRetweetedStatus().getUser().getScreenName() + "  (Retweeted by @" + status.getUser().getScreenName() + ")" + System.getProperty("line.separator") + System.getProperty("line.separator") + textRT + System.getProperty("line.separator") + System.getProperty("line.separator") + "RT " + status.getRetweetCount() + "     LIKE " + status.getFavoriteCount() + "        In reply to @" + status.getInReplyToScreenName() + System.getProperty("line.separator"), status.getId());
+                                } else{
+                                    twitter4j.Status RT = status.getRetweetedStatus();
+                                    String textRT = RT.getText();
+                                    editor.putString(status.getId()+"text", textRT);
+                                    listItems.add(System.getProperty("line.separator") + "@" + status.getRetweetedStatus().getUser().getScreenName() + "  (Retweeted by @" + status.getUser().getScreenName() + ")" + System.getProperty("line.separator") + System.getProperty("line.separator") + textRT + System.getProperty("line.separator") + System.getProperty("line.separator") + "RT " + status.getRetweetCount() + "     LIKE " + status.getFavoriteCount() + System.getProperty("line.separator"));
+                                    editor.putLong(System.getProperty("line.separator") + "@" + status.getRetweetedStatus().getUser().getScreenName() + "  (Retweeted by @" + status.getUser().getScreenName() + ")" + System.getProperty("line.separator") + System.getProperty("line.separator") + textRT + System.getProperty("line.separator") + System.getProperty("line.separator") + "RT " + status.getRetweetCount() + "     LIKE " + status.getFavoriteCount() + System.getProperty("line.separator"), status.getId());
+                                }
+
+                            } else {
+                                if(status.getInReplyToScreenName() != null){
+                                    editor.putString(status.getId()+"text", text);
+                                        listItems.add(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + text + System.getProperty("line.separator") + System.getProperty("line.separator") + "RT " + status.getRetweetCount() + "     LIKE " + status.getFavoriteCount() + "        In reply to @" + status.getInReplyToScreenName() + System.getProperty("line.separator"));
+                                    editor.putLong(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + text + System.getProperty("line.separator") + System.getProperty("line.separator") + "RT " + status.getRetweetCount() + "     LIKE " + status.getFavoriteCount() + "        In reply to @" + status.getInReplyToScreenName() + System.getProperty("line.separator"), status.getId());
+                                } else{
+                                    editor.putString(status.getId()+"text", text);
+                                    listItems.add(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + text + System.getProperty("line.separator") + System.getProperty("line.separator") + "RT " + status.getRetweetCount() + "     LIKE " + status.getFavoriteCount() + System.getProperty("line.separator"));
+                                    editor.putLong(System.getProperty("line.separator") + "@" + status.getUser().getScreenName() + System.getProperty("line.separator") + System.getProperty("line.separator") + text + System.getProperty("line.separator") + System.getProperty("line.separator") + "RT " + status.getRetweetCount() + "     LIKE " + status.getFavoriteCount() + System.getProperty("line.separator"), status.getId());
+                                }
+                            }
+                            editor.putString(status.getId()+"profile", status.getUser().getProfileImageURL());
+                            editor.putString(status.getId()+"username", status.getUser().getScreenName());
+                            editor.putString(status.getId()+"RTcount", ""+status.getRetweetCount());
+                            if (status.isRetweet()){
+                                editor.putString(status.getId()+"RTusername", ""+status.getRetweetedStatus().getUser().getScreenName());
+                                editor.putString(status.getId()+"RTname", ""+status.getRetweetedStatus().getUser().getName());
+                                editor.putBoolean(status.getId()+"RTstatus", true);
+                                editor.putString(status.getId()+"RTprofile", status.getRetweetedStatus().getUser().getProfileImageURL());
+                            } else {
+                                editor.putBoolean(status.getId() + "RTstatus", false);
+                            }
+                            editor.putString(status.getId()+"replyScreen", status.getInReplyToScreenName());
+                            editor.putString(status.getId()+"LKcount", ""+status.getFavoriteCount());
+                            editor.putString(status.getId()+"name", status.getUser().getName());
+                            MediaEntity[] media = status.getMediaEntities();
+                            for(MediaEntity m : media) {
+                                editor.putString(status.getId()+"media", m.getMediaURL().toString());
+                            }
+                            editor.commit();
+                        }
+                    } catch (twitter4j.TwitterException e) {
+                        e.printStackTrace();
+                    }
+
+                    swipeLayout.setRefreshing(false);
+                    TextView title = (TextView)findViewById(R.id.toolbar_title);
+                    title.setText("Tweetify");
+                }
+            });
+            return null;
+        }
     }
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
@@ -248,25 +315,4 @@ implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener
         intent.putExtra("ID", tweet_id);
         startActivity(intent);
     }
-
-    @Override
-    public void onBackPressed() {
-        Intent homeIntent = new Intent(Intent.ACTION_MAIN);
-        homeIntent.addCategory(Intent.CATEGORY_HOME);
-        startActivity(homeIntent);
-    }
-    private class SimpleTask2 extends AsyncTask<Void, Void, Void> {
-
-        @Override
-        protected Void doInBackground(Void... params) {
-            runOnUiThread(new Runnable() {
-                public void run(){
-                    onLoadTimeline();
-                }
-            });
-            return null;
-        }
-
-    }
-
 }

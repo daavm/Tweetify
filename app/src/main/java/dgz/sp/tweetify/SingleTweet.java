@@ -1,8 +1,5 @@
 package dgz.sp.tweetify;
 
-import android.app.ListActivity;
-import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -10,71 +7,123 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.StrictMode;
 import android.preference.PreferenceManager;
-import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
-import android.webkit.WebView;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.twitter.sdk.android.core.Callback;
-import com.twitter.sdk.android.core.Result;
-import com.twitter.sdk.android.core.TwitterException;
-import com.twitter.sdk.android.core.TwitterSession;
-import com.twitter.sdk.android.core.internal.TwitterCollection;
-import com.twitter.sdk.android.core.models.Tweet;
-import com.twitter.sdk.android.core.services.StatusesService;
 import com.twitter.sdk.android.tweetui.CompactTweetView;
-import com.twitter.sdk.android.tweetui.FixedTweetTimeline;
-import com.twitter.sdk.android.tweetui.Timeline;
-import com.twitter.sdk.android.tweetui.TweetView;
-import com.twitter.sdk.android.tweetui.TweetTimelineListAdapter;
-import com.twitter.sdk.android.core.Callback;
-import com.twitter.sdk.android.core.Result;
 import com.twitter.sdk.android.tweetui.TweetViewFetchAdapter;
-
-import org.w3c.dom.Text;
 
 import twitter4j.MediaEntity;
 import twitter4j.Status;
-import twitter4j.StatusUpdate;
-import twitter4j.TweetEntity;
 import twitter4j.Twitter;
 import twitter4j.TwitterFactory;
-import twitter4j.User;
 import twitter4j.auth.AccessToken;
-import twitter4j.auth.RequestToken;
-import twitter4j.conf.ConfigurationBuilder;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Arrays;
-import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by David on 23/06/2016.
  */
 
 public class SingleTweet extends AppCompatActivity {
+    private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor();
 
     final TweetViewFetchAdapter adapter =
             new TweetViewFetchAdapter<CompactTweetView>(SingleTweet.this);
+    URL url2 = null;
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.tweet_custom);
         final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         final Bundle bundle = getIntent().getExtras();
         final long ID = bundle.getLong("ID");
+        String tweet_text = preferences.getString(ID+"text", "");
+        String profile = preferences.getString(ID+"profile", "");
+        String RTprofile = preferences.getString(ID+"RTprofile", "");
+        String media = preferences.getString(ID+"media", "");
+        String username = preferences.getString(ID+"username", "");
+        String replyScreen = preferences.getString(ID+"replyScreen", "");
+        String name = preferences.getString(ID+"name", "");
+        boolean RTstatus = preferences.getBoolean(ID+"RTstatus", false);
+        String RTname = preferences.getString(ID+"RTname", "");
+        String RTusername = preferences.getString(ID+"RTusername", "");
+
+        String lk = preferences.getString(ID+"LKcount", "");
+        String rt = preferences.getString(ID+"RTcount", "");
+
+        if(RTstatus == true){
+            if(media != ""){
+                setContentView(R.layout.tweet_custom_rt_image);
+            } else{
+                setContentView(R.layout.tweet_custom_rt_noimage);
+            }
+        }else {
+            if(media != ""){
+                setContentView(R.layout.tweet_custom_nort_image);
+            } else{
+                setContentView(R.layout.tweet_custom_nort_noimage);
+            }
+        }
+
+
+        TextView replytext = (TextView)findViewById(R.id.replytext);
+        TextView user_name = (TextView)findViewById(R.id.user_name);
+        TextView RTuser = (TextView)findViewById(R.id.RTuser);
+        TextView usernameText = (TextView)findViewById(R.id.username);
+        ImageView imageView2 = (ImageView)findViewById(R.id.imageView3);
+        ImageView imageView = (ImageView)findViewById(R.id.imageView2);
+        TextView RTcount = (TextView)findViewById(R.id.RTcount);
+        TextView LKcount = (TextView)findViewById(R.id.LKcount);
         final ImageButton RT = (ImageButton)findViewById(R.id.RT);
         final ImageButton LIKE = (ImageButton)findViewById(R.id.LIKE);
+        TextView tweetText = (TextView)findViewById(R.id.tweetText);
 
+        if(replyScreen != null && replyScreen != ""){
+            replytext.setText(System.getProperty("line.separator") + "In reply to @" + replyScreen);
+        }
+        if(RTstatus == true){
+            try {
+                url2 = new URL(RTprofile);
+                Bitmap bmp2 = BitmapFactory.decodeStream(url2.openConnection().getInputStream());
+                imageView2.setImageBitmap(bmp2);
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            user_name.setText(RTname);
+            usernameText.setText("@"+RTusername);
+            RTuser.setText("Retweeted by @" + username);
+        } else{
+            try {
+                url2 = new URL(profile);
+                Bitmap bmp2 = BitmapFactory.decodeStream(url2.openConnection().getInputStream());
+                imageView2.setImageBitmap(bmp2);
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            user_name.setText(name);
+            usernameText.setText("@"+username);
+        }
+        RTcount.setText("RETWEETS" + System.getProperty("line.separator") + rt);
+        LKcount.setText("LIKES" + System.getProperty("line.separator") + lk);
+        tweetText.setText(tweet_text);
+        RT.setVisibility(View.VISIBLE);
+        LIKE.setVisibility(View.VISIBLE);
         RT.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -95,7 +144,20 @@ public class SingleTweet extends AppCompatActivity {
                 like();
             }
         });
-        new SimpleTask().execute();
+
+        Runnable task = new Runnable(){
+            @Override
+            public void run() {
+                new SimpleTask().execute();
+            }
+        };
+        if(media != ""){
+            ProgressBar loading = (ProgressBar)findViewById(R.id.loading);
+            loading.setVisibility(View.VISIBLE);
+        } else {
+        }
+        worker.schedule(task, 1, TimeUnit.SECONDS);
+
     }
     public void loadTweet() throws IOException {
         StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
@@ -103,8 +165,6 @@ public class SingleTweet extends AppCompatActivity {
         final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         final Bundle bundle = getIntent().getExtras();
         final long ID = bundle.getLong("ID");
-        final ImageButton RT = (ImageButton)findViewById(R.id.RT);
-        final ImageButton LIKE = (ImageButton)findViewById(R.id.LIKE);
         final String userTokens = preferences.getString("userTokens", "");
         final String userSecrets = preferences.getString("userSecrets", "");
         final String consumerKey = getString(R.string.KEY);
@@ -117,31 +177,27 @@ public class SingleTweet extends AppCompatActivity {
         twitter.setOAuthAccessToken(accessToken);
         try {
             Status tweet = twitter.showStatus(ID);
-            TextView tweetText = (TextView)findViewById(R.id.tweetText);
-            TextView user_name = (TextView)findViewById(R.id.user_name);
             ImageView imageView = (ImageView)findViewById(R.id.imageView2);
-            TextView username = (TextView)findViewById(R.id.username);
-            ImageView imageView2 = (ImageView)findViewById(R.id.imageView3);
-            URL url2 = new URL(tweet.getUser().getProfileImageURL());
-            Bitmap bmp2 = BitmapFactory.decodeStream(url2.openConnection().getInputStream());
-            imageView2.setImageBitmap(bmp2);
             MediaEntity[] media = tweet.getMediaEntities();
-            tweetText.setText(tweet.getText());
-            user_name.setText(tweet.getUser().getName());
-            username.setText("@"+tweet.getUser().getScreenName());
             for(MediaEntity m : media){
                 URL url = new URL(m.getMediaURL());
                 Bitmap bmp = BitmapFactory.decodeStream(url.openConnection().getInputStream());
                 imageView.setImageBitmap(bmp);
             }
+            ProgressBar loading = (ProgressBar)findViewById(R.id.loading);
+            String mediaurl = preferences.getString(ID+"media", "");
+
+            if(mediaurl != ""){
+                loading.setVisibility(View.INVISIBLE);
+            }
             if(tweet.isRetweetedByMe()) {
-                //Toast.makeText(getApplicationContext(), "Is retweeted by you", Toast.LENGTH_LONG).show();
+                ImageButton RT = (ImageButton)findViewById(R.id.RT);
+                RT.setBackground(getResources().getDrawable(R.drawable.rted_alpha_1));
             }
             if(tweet.isFavorited()) {
-                Toast.makeText(getApplicationContext(), "Is liked by you", Toast.LENGTH_LONG).show();
+                ImageButton LIKE = (ImageButton)findViewById(R.id.LIKE);
+                LIKE.setBackground(getResources().getDrawable(R.drawable.liked_alpha_1));
             }
-            RT.setVisibility(View.VISIBLE);
-            LIKE.setVisibility(View.VISIBLE);
         } catch (twitter4j.TwitterException e) {
             e.printStackTrace();
         } catch (MalformedURLException e) {
@@ -219,39 +275,12 @@ public class SingleTweet extends AppCompatActivity {
             Log.d("TwitterKit", "Liking with Twitter failure", e);
         }
     }
-
-    public void checkRetweet(){
-            final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-            final Bundle bundle = getIntent().getExtras();
-            final long ID = bundle.getLong("ID");
-            final String IDRT = preferences.getString(String.valueOf(ID), "");
-            if (IDRT.contains(String.valueOf(ID))){
-                ImageButton RT = (ImageButton)findViewById(R.id.RT);
-                RT.setBackground(getResources().getDrawable(R.drawable.rted_alpha_1));
-            } else {
-            }
-
-    }
-    public void checkLike(){
-        final SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-        final Bundle bundle = getIntent().getExtras();
-        final long ID = bundle.getLong("ID");
-        final String IDRT = preferences.getString(String.valueOf(ID)+"liked", "");
-        if (IDRT.contains(String.valueOf(ID)+"liked")){
-            ImageButton LIKE = (ImageButton)findViewById(R.id.LIKE);
-            LIKE.setBackground(getResources().getDrawable(R.drawable.liked_alpha_1));
-        } else {
-        }
-
-    }
     private class SimpleTask extends AsyncTask<Void, Void, Void> {
 
         @Override
         protected Void doInBackground(Void... params) {
             runOnUiThread(new Runnable() {
                 public void run(){
-                    checkLike();
-                    checkRetweet();
                     try {
                         loadTweet();
                     } catch (IOException e) {
